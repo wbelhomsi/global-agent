@@ -1,8 +1,10 @@
 {
   "author": {
-    "email": "gajus@gajus.com",
-    "name": "Gajus Kuizinas",
-    "url": "http://gajus.com"
+    "email": "waelhomsi94@gmail.com",
+    "name": "Wael El Homsi",
+    "forkedFromUserEmail": "gajus@gajus.com",
+    "forkedFromUserName": "Gajus Kuizinas",
+    "forkedFromUserUrl": "http://gajus.com"
   },
   "ava": {
     "babel": {
@@ -18,15 +20,11 @@
     ]
   },
   "dependencies": {
-    "boolean": "^3.0.0",
     "core-js": "^3.6.4",
     "es6-error": "^4.1.1",
-    "matcher": "^2.1.0",
-    "roarr": "^2.15.2",
-    "semver": "^7.1.2",
-    "serialize-error": "^5.0.0"
+    "semver": "^7.1.2"
   },
-  "description": "Global HTTP/HTTPS proxy configurable using environment variables.",
+  "description": "Global HTTP/HTTPS proxy configurable using options.",
   "devDependencies": {
     "@ava/babel": "^1.0.0",
     "@babel/cli": "^7.8.4",
@@ -59,7 +57,7 @@
   },
   "husky": {
     "hooks": {
-      "pre-commit": "npm run lint && npm run test && npm run build"
+      "pre-commit": "npm run build-win"
     }
   },
   "keywords": [
@@ -96,6 +94,7 @@
     "url": "https://github.com/gajus/global-agent"
   },
   "scripts": {
+    "build-win": "set NODE_ENV=production&&babel ./src --out-dir ./dist --copy-files --source-maps&&flow-copy-source src dist",
     "build": "rm -fr ./dist && NODE_ENV=production babel ./src --out-dir ./dist --copy-files --source-maps && flow-copy-source src dist",
     "create-readme": "gitdown ./.README/README.md --output-file ./README.md",
     "dev": "NODE_ENV=development babel ./src --out-dir ./dist --copy-files --source-maps --watch",

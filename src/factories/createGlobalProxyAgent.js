@@ -2,11 +2,7 @@
 
 import http from 'http';
 import https from 'https';
-import {
-  boolean as parseBoolean,
-} from 'boolean';
 import semver from 'semver';
-import Logger from '../Logger';
 import {
   HttpProxyAgent,
   HttpsProxyAgent,
@@ -16,26 +12,15 @@ import {
 } from '../errors';
 import {
   bindHttpMethod,
-  isUrlMatchingNoProxy,
   parseProxyUrl,
 } from '../utilities';
-import type {
-  ProxyAgentConfigurationInputType,
-  ProxyAgentConfigurationType,
-} from '../types';
-import createProxyController from './createProxyController';
 
 const httpGet = http.get;
 const httpRequest = http.request;
 const httpsGet = https.get;
 const httpsRequest = https.request;
 
-const log = Logger.child({
-  namespace: 'createGlobalProxyAgent',
-});
-
 const defaultConfigurationInput = {
-  environmentVariableNamespace: undefined,
   forceGlobalAgent: undefined,
   socketConnectionTimeout: 60000,
 };
@@ -56,56 +41,77 @@ const omitUndefined = (subject) => {
   return result;
 };
 
-const createConfiguration = (configurationInput: ProxyAgentConfigurationInputType): ProxyAgentConfigurationType => {
-  // eslint-disable-next-line no-process-env
-  const environment = process.env;
-
+const createConfiguration = (configurationInput) => {
   const defaultConfiguration = {
-    environmentVariableNamespace: typeof environment.GLOBAL_AGENT_ENVIRONMENT_VARIABLE_NAMESPACE === 'string' ? environment.GLOBAL_AGENT_ENVIRONMENT_VARIABLE_NAMESPACE : 'GLOBAL_AGENT_',
-    forceGlobalAgent: typeof environment.GLOBAL_AGENT_FORCE_GLOBAL_AGENT === 'string' ? parseBoolean(environment.GLOBAL_AGENT_FORCE_GLOBAL_AGENT) : true,
-    socketConnectionTimeout: typeof environment.GLOBAL_AGENT_SOCKET_CONNECTION_TIMEOUT === 'string' ? parseInt(environment.GLOBAL_AGENT_SOCKET_CONNECTION_TIMEOUT, 10) : defaultConfigurationInput.socketConnectionTimeout,
+    forceGlobalAgent: true,
+    socketConnectionTimeout: defaultConfigurationInput.socketConnectionTimeout,
   };
 
-  // $FlowFixMe
   return {
     ...defaultConfiguration,
     ...omitUndefined(configurationInput),
   };
 };
 
-export default (configurationInput: ProxyAgentConfigurationInputType = defaultConfigurationInput) => {
+const getProxyUrl = (proxyConfig) => {
+  if (!proxyConfig) {
+    return null;
+  }
+  if (typeof proxyConfig === 'string') {
+    return proxyConfig;
+  }
+  if (proxyConfig.username && proxyConfig.password) {
+    return proxyConfig.scheme + '://' + encodeURIComponent(proxyConfig.username) + ':' +
+                encodeURIComponent(proxyConfig.password) + '@' + proxyConfig.host + ':' + proxyConfig.port;
+  }
+
+  return proxyConfig.scheme + '://' + proxyConfig.host + ':' + proxyConfig.port;
+};
+
+export default (configurationInput = defaultConfigurationInput) => {
   const configuration = createConfiguration(configurationInput);
 
-  const proxyController = createProxyController();
+  const proxyFunc = configurationInput.proxyFunc;
+  const noProxyFunc = configurationInput.noProxyFunc;
 
-  // eslint-disable-next-line no-process-env
-  proxyController.HTTP_PROXY = process.env[configuration.environmentVariableNamespace + 'HTTP_PROXY'] || null;
+  const proxyUrl = getProxyUrl(configurationInput.proxyConfig);
+  const proxyUrlHttps = getProxyUrl(configurationInput.proxyConfig.https) || proxyUrl;
 
-  // eslint-disable-next-line no-process-env
-  proxyController.HTTPS_PROXY = process.env[configuration.environmentVariableNamespace + 'HTTPS_PROXY'] || null;
+  const proxyController = {
+    noProxyFunc,
+    proxy: {
+      http: proxyUrl,
+      https: proxyUrlHttps,
+    },
+    proxyFunc,
+  };
 
-  // eslint-disable-next-line no-process-env
-  proxyController.NO_PROXY = process.env[configuration.environmentVariableNamespace + 'NO_PROXY'] || null;
-
-  log.info({
-    configuration,
-    state: proxyController,
-  }, 'global agent has been initialized');
-
+  // eslint-disable-next-line unicorn/consistent-function-scoping
   const mustUrlUseProxy = (getProxy) => {
     return (url) => {
       if (!getProxy()) {
         return false;
       }
 
-      if (!proxyController.NO_PROXY) {
-        return true;
+      if (proxyController.proxyFunc) {
+        const doProxy = proxyController.proxyFunc(new URL(url));
+        if (doProxy !== undefined) {
+          return Boolean(doProxy);
+        }
       }
 
-      return !isUrlMatchingNoProxy(url, proxyController.NO_PROXY);
+      if (proxyController.noProxyFunc) {
+        const doNotProxy = proxyController.noProxyFunc(new URL(url));
+        if (doNotProxy !== undefined) {
+          return !Boolean(doNotProxy);
+        }
+      }
+
+      return true;
     };
   };
 
+  // eslint-disable-next-line unicorn/consistent-function-scoping
   const getUrlProxy = (getProxy) => {
     return () => {
       const proxy = getProxy();
@@ -119,7 +125,7 @@ export default (configurationInput: ProxyAgentConfigurationInputType = defaultCo
   };
 
   const getHttpProxy = () => {
-    return proxyController.HTTP_PROXY;
+    return proxyController.proxy.http;
   };
 
   const BoundHttpProxyAgent = class extends HttpProxyAgent {
@@ -139,7 +145,7 @@ export default (configurationInput: ProxyAgentConfigurationInputType = defaultCo
   const httpAgent = new BoundHttpProxyAgent();
 
   const getHttpsProxy = () => {
-    return proxyController.HTTPS_PROXY || proxyController.HTTP_PROXY;
+    return proxyController.proxy.https;
   };
 
   const BoundHttpsProxyAgent = class extends HttpsProxyAgent {
@@ -162,10 +168,8 @@ export default (configurationInput: ProxyAgentConfigurationInputType = defaultCo
   // @see https://nodejs.org/uk/blog/release/v11.7.0/
   if (semver.gte(process.version, 'v11.7.0')) {
     // @see https://github.com/facebook/flow/issues/7670
-    // $FlowFixMe
     http.globalAgent = httpAgent;
 
-    // $FlowFixMe
     https.globalAgent = httpsAgent;
   }
 
@@ -178,19 +182,13 @@ export default (configurationInput: ProxyAgentConfigurationInputType = defaultCo
   // We still want to override http(s).globalAgent when possible to enable logic
   // in `bindHttpMethod`.
   if (semver.gte(process.version, 'v10.0.0')) {
-    // $FlowFixMe
     http.get = bindHttpMethod(httpGet, httpAgent, configuration.forceGlobalAgent);
 
-    // $FlowFixMe
     http.request = bindHttpMethod(httpRequest, httpAgent, configuration.forceGlobalAgent);
 
-    // $FlowFixMe
     https.get = bindHttpMethod(httpsGet, httpsAgent, configuration.forceGlobalAgent);
 
-    // $FlowFixMe
     https.request = bindHttpMethod(httpsRequest, httpsAgent, configuration.forceGlobalAgent);
-  } else {
-    log.warn('attempt to initialize global-agent in unsupported Node.js version was ignored');
   }
 
   return proxyController;

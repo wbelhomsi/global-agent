@@ -2,22 +2,18 @@
 
 import net from 'net';
 import tls from 'tls';
-import type {
-  ConnectionCallbackType,
-  ConnectionConfigurationType,
-} from '../types';
 import Agent from './Agent';
 
 class HttpsProxyAgent extends Agent {
   // eslint-disable-next-line unicorn/prevent-abbreviations
-  constructor (...args: *) {
+  constructor (...args) {
     super(...args);
 
     this.protocol = 'https:';
     this.defaultPort = 443;
   }
 
-  createConnection (configuration: ConnectionConfigurationType, callback: ConnectionCallbackType) {
+  createConnection (configuration, callback) {
     const socket = net.connect(
       configuration.proxy.port,
       configuration.proxy.hostname,

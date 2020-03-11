@@ -1,45 +1,15 @@
 // @flow
 
-import {
-  serializeError,
-} from 'serialize-error';
-import Logger from '../Logger';
-import type {
-  AgentType,
-  GetUrlProxyMethodType,
-  IsProxyConfiguredMethodType,
-  MustUrlUseProxyMethodType,
-  ProtocolType,
-} from '../types';
-
-const log = Logger.child({
-  namespace: 'Agent',
-});
-
-let requestId = 0;
-
 class Agent {
-  defaultPort: number;
-
-  protocol: ProtocolType;
-
-  fallbackAgent: AgentType;
-
-  isProxyConfigured: IsProxyConfiguredMethodType;
-
-  mustUrlUseProxy: MustUrlUseProxyMethodType;
-
-  getUrlProxy: GetUrlProxyMethodType;
-
-  socketConnectionTimeout: number;
-
   constructor (
-    isProxyConfigured: IsProxyConfiguredMethodType,
-    mustUrlUseProxy: MustUrlUseProxyMethodType,
-    getUrlProxy: GetUrlProxyMethodType,
-    fallbackAgent: AgentType,
-    socketConnectionTimeout: number,
+    isProxyConfigured,
+    mustUrlUseProxy,
+    getUrlProxy,
+    fallbackAgent,
+    socketConnectionTimeout,
   ) {
+    this.defaultPort = null;
+    this.protocol = null;
     this.fallbackAgent = fallbackAgent;
     this.isProxyConfigured = isProxyConfigured;
     this.mustUrlUseProxy = mustUrlUseProxy;
@@ -47,7 +17,7 @@ class Agent {
     this.socketConnectionTimeout = socketConnectionTimeout;
   }
 
-  addRequest (request: *, configuration: *) {
+  addRequest (request, configuration) {
     let requestUrl;
 
     // It is possible that addRequest was constructed for a proxied request already, e.g.
@@ -57,32 +27,21 @@ class Agent {
     if (request.path.startsWith('http://') || request.path.startsWith('https://')) {
       requestUrl = request.path;
     } else {
-      requestUrl = this.protocol + '//' + (configuration.hostname || configuration.host) + (configuration.port === 80 || configuration.port === 443 ? '' : ':' + configuration.port) + request.path;
+      requestUrl = this.protocol + '//' + (configuration.hostname || configuration.host) +
+                    (configuration.port === 80 || configuration.port === 443 ? '' : ':' + configuration.port) + request.path;
     }
 
     if (!this.isProxyConfigured()) {
-      log.trace({
-        destination: requestUrl,
-      }, 'not proxying request; GLOBAL_AGENT.HTTP_PROXY is not configured');
-
-      // $FlowFixMe It appears that Flow is missing the method description.
       this.fallbackAgent.addRequest(request, configuration);
 
       return;
     }
 
     if (!this.mustUrlUseProxy(requestUrl)) {
-      log.trace({
-        destination: requestUrl,
-      }, 'not proxying request; url matches GLOBAL_AGENT.NO_PROXY');
-
-      // $FlowFixMe It appears that Flow is missing the method description.
       this.fallbackAgent.addRequest(request, configuration);
 
       return;
     }
-
-    const currentRequestId = requestId++;
 
     const proxy = this.getUrlProxy(requestUrl);
 
@@ -94,26 +53,6 @@ class Agent {
       }
     }
 
-    log.trace({
-      destination: requestUrl,
-      proxy: 'http://' + proxy.hostname + ':' + proxy.port,
-      requestId: currentRequestId,
-    }, 'proxying request');
-
-    request.on('error', (error) => {
-      log.error({
-        error: serializeError(error),
-      }, 'request error');
-    });
-
-    request.once('response', (response) => {
-      log.trace({
-        headers: response.headers,
-        requestId: currentRequestId,
-        statusCode: response.statusCode,
-      }, 'proxying response');
-    });
-
     request.shouldKeepAlive = false;
 
     const connectionConfiguration = {
@@ -122,12 +61,7 @@ class Agent {
       proxy,
     };
 
-    // $FlowFixMe It appears that Flow is missing the method description.
     this.createConnection(connectionConfiguration, (error, socket) => {
-      log.trace({
-        target: connectionConfiguration,
-      }, 'connecting');
-
       // @see https://github.com/nodejs/node/issues/5757#issuecomment-305969057
       if (socket) {
         socket.setTimeout(this.socketConnectionTimeout, () => {
@@ -135,18 +69,10 @@ class Agent {
         });
 
         socket.once('connect', () => {
-          log.trace({
-            target: connectionConfiguration,
-          }, 'connected');
-
           socket.setTimeout(0);
         });
 
         socket.once('secureConnect', () => {
-          log.trace({
-            target: connectionConfiguration,
-          }, 'connected (secure)');
-
           socket.setTimeout(0);
         });
       }
@@ -154,14 +80,6 @@ class Agent {
       if (error) {
         request.emit('error', error);
       } else {
-        log.debug('created socket');
-
-        socket.on('error', (socketError) => {
-          log.error({
-            error: serializeError(socketError),
-          }, 'socket error');
-        });
-
         request.onSocket(socket);
       }
     });

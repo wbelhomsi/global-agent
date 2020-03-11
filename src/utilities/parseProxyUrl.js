@@ -7,7 +7,7 @@ import {
   UnexpectedStateError,
 } from '../errors';
 
-export default (url: string) => {
+export default (url) => {
   const urlTokens = parseUrl(url);
 
   if (urlTokens.query !== null) {
