@@ -72,6 +72,7 @@ if (MAJOR_NODEJS_VERSION >= 10) {
   // `global-tunnel-ng` works only with Node.js v10 and below.
   globalTunnel.initialize();
 }
+```
 
 ## Supported libraries
 
