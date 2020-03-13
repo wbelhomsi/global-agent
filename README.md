@@ -9,7 +9,10 @@ This project is a fork from [gajus](https://github.com/gajus) [global-agent](htt
 
 ### npm install package
 
-    npm install global-agent-wbe
+```js
+npm install global-agent-wbe
+
+```
 
 ```js
 const { bootstrap } = require('global-agent-wbe');
@@ -29,7 +32,17 @@ const options = {
       password: 'password', // if empty doesnt use authentication
     }
   },
-  proxyFunc: function(options) { // Only uses proxy if the this function returns true
+  proxyFunc: function(options) {
+    // If this function returns undefined, doesn't do anything (as if it doesn't exist)
+    // If this function returns truthy, proxies the request
+    // If this function returns falsey(except undefined), does not proxy the request
+    return options.hostname.includes('microsoft');
+  },
+  noProxyFunc: function(options) {
+    // only used if proxyFunc is not defined or if proxyFunc returns undefnied
+    // If this function returns undefined, it uses the proxy
+    // If this function returns falsey(except undefined), proxies the request
+    // If this function returns truthy, does not proxy the request
     return options.hostname.includes('microsoft');
   }
 };
@@ -37,7 +50,7 @@ bootstrap(options);
 
 ```
 
-This is useful if you need to conditionally bootstrap `global-agent`, e.g.
+This is useful if you need to conditionally bootstrap `global-agent-wbe`, e.g.
 
 ```js
 const { bootstrap } = require('global-agent-wbe');
@@ -48,7 +61,7 @@ const MAJOR_NODEJS_VERSION = parseInt(process.version.slice(1).split('.')[0], 10
 if (MAJOR_NODEJS_VERSION >= 10) {
   // `global-agent` works with Node.js v10 and above.
   const options = {
-  proxyConfig: {
+    proxyConfig: {
       scheme: 'http',
       host: 'proxy.example.com',
       port: 8080,
@@ -62,7 +75,17 @@ if (MAJOR_NODEJS_VERSION >= 10) {
         password: 'password', // if empty doesnt use authentication
       }
     },
-    proxyFunc: function(options) { // Only uses proxy if the this function returns true
+    proxyFunc: function(options) {
+      // If this function returns undefined, doesn't do anything (as if it doesn't exist)
+      // If this function returns true, proxies the request
+      // If this function returns false, does not proxy the request
+      return options.hostname.includes('microsoft');
+    },
+    noProxyFunc: function(options) {
+      // only used if proxyFunc is not defined or if proxyFunc returns undefnied
+      // If this function returns undefined, it uses the proxy
+      // If this function returns false, proxies the request
+      // If this function returns true, does not proxy the request
       return options.hostname.includes('microsoft');
     }
   };
