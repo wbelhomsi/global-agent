@@ -1,5 +1,7 @@
 # global-agent-wbe
 
+This project is a fork from [gajus](https://github.com/gajus) [global-agent](https://github.com/gajus/global-agent) module, made to work with options instead of global variables
+
 * [Usage](#usage)
 * [FAQ](#faq)
  
@@ -7,10 +9,7 @@
 
 ### npm install package
 
-```js
-npm install global-agent-wbe
-
-```
+    npm install global-agent-wbe
 
 ```js
 const { bootstrap } = require('global-agent-wbe');
